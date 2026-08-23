@@ -19,7 +19,7 @@ def send_line(message):
 
     if (
         not LINE_CHANNEL_ACCESS_TOKEN
-        or not USER_ID
+        or not LINE_USER_ID
     ):
         return
 
@@ -32,7 +32,7 @@ def send_line(message):
     }
 
     payload = {
-        "to": USER_ID,
+        "to": LINE_USER_ID,
         "messages": [
             {
                 "type": "text",
@@ -66,7 +66,7 @@ def send_line(message):
         )
 
 text= (
-    f"[🈷️線] "
+    f"[TEST] "
     f"3244 甲乙丙 \n"
     f"Buy: 123    |    "
     f"Sell: 123 \n"
@@ -78,5 +78,5 @@ text1= (
     f"💲: 1223 \n"
     f"LvL 8: 321"
     )
-# send_line(text)
+send_line(text)
 # send_line(text1)
