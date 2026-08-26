@@ -34,6 +34,8 @@ HEADERS = {
 # ==================================================
 
 HISTORY_30M_BARS = 200
+HISTORY_DAILY_DAYS = 19
+
 TIMEFRAME = "30"
 
 HISTORY_FILE = os.path.join(
@@ -759,49 +761,331 @@ def update_all_30m(
 
     return history
 
+# ==================================================
+# 取得歷史日K
+# ==================================================
 
+def fetch_historical_daily(
+    stock,
+    start_date,
+    end_date
+):
+
+    url = (
+        f"{BASE_URL}/"
+        f"historical/candles/"
+        f"{stock}"
+    )
+
+    params = {
+
+        "from":
+            start_date.strftime(
+                "%Y-%m-%d"
+            ),
+
+        "to":
+            end_date.strftime(
+                "%Y-%m-%d"
+            ),
+
+        "timeframe":
+            "D",
+
+        "fields":
+            "open,high,low,close,volume,average",
+
+        "sort":
+            "asc"
+    }
+
+    response = session.get(
+        url,
+        headers=HEADERS,
+        params=params,
+        timeout=15
+    )
+
+    response.raise_for_status()
+
+    result = response.json()
+
+    return result.get(
+        "data",
+        []
+    )
+# ==================================================
+# 更新單一股票歷史日K
+# ==================================================
+
+def update_stock_daily(
+    stock,
+    history
+):
+
+    stock_key = str(stock)
+
+    if stock_key not in history:
+
+        history[stock_key] = []
+
+
+    # --------------------------------------------------
+    # 目前本地資料
+    # --------------------------------------------------
+
+    existing = {}
+
+    for item in history[stock_key]:
+
+        try:
+
+            if len(item) != 2:
+                continue
+
+            date = str(item[0])
+            close = float(item[1])
+
+            existing[date] = close
+
+        except Exception:
+
+            continue
+
+
+    # --------------------------------------------------
+    # 抓取最近70天
+    # --------------------------------------------------
+
+    today = datetime.now().date()
+
+    start_date = (
+        today - timedelta(days=70)
+    )
+
+    end_date = (
+        today - timedelta(days=1)
+    )
+
+
+    print(
+        f"\n取得 {stock} 歷史日K..."
+    )
+
+
+    candles = fetch_historical_daily(
+        stock,
+        start_date,
+        end_date
+    )
+
+
+    # --------------------------------------------------
+    # 加入 Fugle 資料
+    # --------------------------------------------------
+
+    for candle in candles:
+
+        try:
+
+            date = candle["date"]
+
+            close = float(
+                candle["close"]
+            )
+
+            existing[date] = close
+
+        except (
+            KeyError,
+            TypeError,
+            ValueError
+        ):
+
+            continue
+
+
+    # --------------------------------------------------
+    # 排序
+    # --------------------------------------------------
+
+    all_data = sorted(
+        existing.items()
+    )
+
+
+    # --------------------------------------------------
+    # 保留最新19個交易日
+    # --------------------------------------------------
+
+    final_data = all_data[
+        -HISTORY_DAILY_DAYS:
+    ]
+
+
+    # --------------------------------------------------
+    # 寫回 history
+    # --------------------------------------------------
+
+    history[stock_key] = [
+
+        [
+            date,
+            close
+        ]
+
+        for date, close
+        in final_data
+
+    ]
+
+
+    # --------------------------------------------------
+    # 顯示
+    # --------------------------------------------------
+
+    print(
+        f"{stock} 日K目前共有 "
+        f"{len(final_data)} 天"
+    )
+
+
+    if final_data:
+
+        print(
+            f"{stock} 日K範圍: "
+            f"{final_data[0][0]} 至 "
+            f"{final_data[-1][0]}"
+        )
+
+
+    return True
+# ==================================================
+# 更新全部股票日K
+# ==================================================
+
+def update_all_daily(
+    Stocks
+):
+
+    if not API_KEY:
+
+        print(
+            "找不到 FUGLE_API_KEY，"
+            "無法取得日K"
+        )
+
+        return {}
+
+
+    history = load_history()
+
+
+    for stock in Stocks:
+
+        try:
+
+            update_stock_daily(
+                stock,
+                history
+            )
+
+        except Exception as e:
+
+            print(
+                f"{stock} "
+                f"日K更新失敗:",
+                e
+            )
+
+
+    if save_history(
+        history
+    ):
+
+        print(
+            "\n日K history 已更新"
+        )
+
+    else:
+
+        print(
+            "\n日K history 更新失敗"
+        )
+
+
+    return history
 # ==================================================
 # 測試
 # ==================================================
 
-# if __name__ == "__main__":
-
-#     Stocks = [
-#         2330
-#     ]
-
-#     update_all_30m(
-#         Stocks
-#     )
 if __name__ == "__main__":
 
     Stocks = [
         2330
     ]
 
-    for stock in Stocks:
+    from datetime import date
 
-        try:
+    start_date = date(
+        2026,
+        7,
+        1
+    )
 
-            result = fetch_realtime_price(
-                stock
-            )
+    end_date = date(
+        2026,
+        8,
+        25
+    )
+
+    print(
+        "========================================"
+    )
+
+    print(
+        "Fugle 歷史日K測試"
+    )
+
+    print(
+        "========================================"
+    )
+
+    try:
+
+        data = fetch_historical_daily(
+            2330,
+            start_date,
+            end_date
+        )
+
+        print(
+            f"取得日K: {len(data)} 根"
+        )
+
+        print(
+            "\n--- 前3根 ---"
+        )
+
+        for candle in data[:3]:
 
             print(
-                "\n========== Fugle 即時報價 =========="
+                candle
             )
+
+        print(
+            "\n--- 後3根 ---"
+        )
+
+        for candle in data[-3:]:
 
             print(
-                f"股票: {stock}"
+                candle
             )
 
-            print(
-                result
-            )
+    except Exception as e:
 
-        except Exception as e:
-
-            print(
-                f"{stock} 即時報價取得失敗:",
-                e
-            )
+        print(
+            "取得失敗:",
+            e
+        )

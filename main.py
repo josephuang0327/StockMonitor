@@ -1,10 +1,7 @@
 import time
 
-from data_fetch import (
-    update_all_history
-)
-
 from fugle import (
+    update_all_daily,
     update_all_30m,
     fetch_realtime_price
 )
@@ -38,7 +35,7 @@ print(
     "正在檢查並校正歷史資料..."
 )
 
-history = update_all_history(
+history = update_all_daily(
     Stocks
 )
 
