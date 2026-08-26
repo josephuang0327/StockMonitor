@@ -33,7 +33,7 @@ HEADERS = {
 # 設定
 # ==================================================
 
-HISTORY_30M_BARS = 500
+HISTORY_30M_BARS = 200
 TIMEFRAME = "30"
 
 HISTORY_FILE = os.path.join(
@@ -210,7 +210,31 @@ def fetch_intraday_30m(
         []
     )
 
+# ==================================================
+# 取得 Fugle 即時成交價
+# ==================================================
 
+def fetch_realtime_price(
+    stock
+):
+
+    url = (
+        f"{BASE_URL}/"
+        f"intraday/quote/"
+        f"{stock}"
+    )
+
+    response = session.get(
+        url,
+        headers=HEADERS,
+        timeout=15
+    )
+
+    response.raise_for_status()
+
+    result = response.json()
+
+    return result
 # ==================================================
 # 整理 Fugle 30 分 K
 # ==================================================
@@ -401,7 +425,7 @@ def update_stock_30m(
 
         start_date = (
             today
-            - timedelta(days=120)
+            - timedelta(days=70)
         )
 
         end_date = (
@@ -740,12 +764,44 @@ def update_all_30m(
 # 測試
 # ==================================================
 
+# if __name__ == "__main__":
+
+#     Stocks = [
+#         2330
+#     ]
+
+#     update_all_30m(
+#         Stocks
+#     )
 if __name__ == "__main__":
 
     Stocks = [
         2330
     ]
 
-    update_all_30m(
-        Stocks
-    )
+    for stock in Stocks:
+
+        try:
+
+            result = fetch_realtime_price(
+                stock
+            )
+
+            print(
+                "\n========== Fugle 即時報價 =========="
+            )
+
+            print(
+                f"股票: {stock}"
+            )
+
+            print(
+                result
+            )
+
+        except Exception as e:
+
+            print(
+                f"{stock} 即時報價取得失敗:",
+                e
+            )

@@ -1,8 +1,12 @@
 import time
 
 from data_fetch import (
-    update_all_history,
-    fetch_realtime
+    update_all_history
+)
+
+from fugle import (
+    update_all_30m,
+    fetch_realtime_price
 )
 
 from line_notify import (
@@ -11,7 +15,9 @@ from line_notify import (
 
 from indicators import (
     calculate_indicators,
-    check_signals
+    check_signals,
+    calculate_ema23,
+    calculate_ema_filter
 )
 
 
@@ -35,6 +41,28 @@ print(
 history = update_all_history(
     Stocks
 )
+
+
+# ==================================================
+# 30分K DATA
+# ==================================================
+
+print(
+    "\n正在檢查並更新30分K資料..."
+)
+
+history_30m = update_all_30m(
+    Stocks
+)
+
+# 保留原本日K history
+# 只把30分K資料加入進來
+
+if "30m" in history_30m:
+
+    history["30m"] = (
+        history_30m["30m"]
+    )
 
 
 # ==================================================
@@ -123,86 +151,179 @@ while True:
             continue
 
 
-        data = fetch_realtime(
-            list(MA_DATA.keys())
-        )
+        # ==================================================
+        # 取得 Fugle 即時報價
+        # ==================================================
 
+        for stock in MA_DATA:
 
-        for stk in data.get(
-            "msgArray",
-            []
-        ):
+            stock_key = str(stock)
 
-            stock = int(
-                stk["c"]
-            )
+            try:
 
+                quote = (
+                    fetch_realtime_price(
+                        stock
+                    )
+                )
 
-            if stock not in MA_DATA:
+            except Exception as e:
+
+                print(
+                    f"{stock} "
+                    f"Fugle 即時報價取得失敗:",
+                    e
+                )
 
                 continue
+
+
+            # ==================================================
+            # 最新成交價
+            # ==================================================
+
+            price = quote.get(
+                "lastPrice"
+            )
+
+            if price is None:
+
+                print(
+                    f"{stock} "
+                    f"沒有取得最新成交價"
+                )
+
+                continue
+
+            price = float(
+                price
+            )
 
 
             # ==================================================
             # 買一 / 賣一
             # ==================================================
 
-            buy1_text = (
-                stk["b"]
-                .split("_")[0]
+            bids = quote.get(
+                "bids",
+                []
             )
 
-            sell1_text = (
-                stk["a"]
-                .split("_")[0]
+            asks = quote.get(
+                "asks",
+                []
             )
 
 
-            if (
+            if not bids or not asks:
 
-                buy1_text in (
-                    "",
-                    "-"
+                print(
+                    f"{stock} "
+                    f"沒有買一或賣一資料"
                 )
-
-                or
-
-                sell1_text in (
-                    "",
-                    "-"
-                )
-
-            ):
 
                 continue
 
 
             buy1 = float(
-                buy1_text
+                bids[0]["price"]
             )
 
             sell1 = float(
-                sell1_text
+                asks[0]["price"]
             )
-
-
-            # ==================================================
-            # 當下價格
-            # ==================================================
-
-            price = (
-                buy1 + sell1
-            ) / 2
 
 
             # ==================================================
             # 計算 MA / BBand / Level
+            #
+            # 現在價格全部使用 Fugle lastPrice
             # ==================================================
 
             indicators = calculate_indicators(
                 MA_DATA[stock],
                 price
             )
+            print(
+                f"{stock} 指標 | "
+                f"Price: {price:.2f} | "
+                f"MA5: {indicators['ma5']:.2f} | "
+                f"MA10: {indicators['ma10']:.2f} | "
+                f"MA20: {indicators['ma20']:.2f} | "
+                f"UB: {indicators['ub']:.2f} | "
+                f"LB: {indicators['lb']:.2f} | "
+                f"Level8: {indicators['level8']:.2f} | "
+                f"Level-8: {indicators['level_neg8']:.2f}"
+            )
+
+            # ==================================================
+            # EMA23
+            # ==================================================
+
+            ema23 = None
+
+            ema_up = None
+
+            ema_dw = None
+
+
+            if (
+                "30m" in history
+                and stock_key in history["30m"]
+            ):
+
+                candles_30m = (
+                    history["30m"][stock_key]
+                )
+
+
+                if len(candles_30m) >= 23:
+
+                    closes_30m = [
+
+                        candle["close"]
+
+                        for candle
+                        in candles_30m
+
+                    ]
+
+
+                    # 完全按照 testema.py
+                    # 的方式計算 EMA23
+
+                    ema23 = calculate_ema23(
+                        closes_30m
+                    )
+
+
+                    # ==================================================
+                    # EMA 即時價格更新
+                    #
+                    # 最後一根已完成30分K的 EMA
+                    # 使用目前 Fugle 成交價更新
+                    # ==================================================
+
+                    alpha = (
+                        2 / (23 + 1)
+                    )
+
+
+                    ema23 = (
+
+                        price * alpha
+
+                        + ema23 * (
+                            1 - alpha
+                        )
+                    )
+
+
+                    ema_up, ema_dw = (
+                        calculate_ema_filter(
+                            ema23
+                        )
+                    )
 
 
             # ==================================================
@@ -211,7 +332,10 @@ while True:
 
             signals = check_signals(
                 stock=stock,
-                name=stk["n"],
+                name=quote.get(
+                    "name",
+                    str(stock)
+                ),
                 buy1=buy1,
                 ma_data=indicators,
                 status=MA_STATUS[stock]
@@ -239,13 +363,37 @@ while True:
 
             if not signals:
 
-                print(
+                if ema23 is not None:
 
-                    f"{stk['c']} "
-                    f"{stk['n']} | "
-                    f"Buy: {buy1:g} | "
-                    f"Sell: {sell1:g}"
-                )
+                    print(
+
+                        f"{stock} "
+                        f"{quote.get('name', '')} | "
+
+                        f"Price: {price:g} | "
+
+                        f"Buy: {buy1:g} | "
+                        f"Sell: {sell1:g} | "
+
+                        f"EMA23: {ema23:.2f} | "
+
+                        f"EMA_UP: {ema_up:.2f} | "
+
+                        f"EMA_DW: {ema_dw:.2f}"
+                    )
+
+                else:
+
+                    print(
+
+                        f"{stock} "
+                        f"{quote.get('name', '')} | "
+
+                        f"Price: {price:g} | "
+
+                        f"Buy: {buy1:g} | "
+                        f"Sell: {sell1:g}"
+                    )
 
 
         # ==================================================

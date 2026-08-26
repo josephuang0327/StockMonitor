@@ -43,20 +43,6 @@ closes = [
 # ==================================================
 # 計算 EMA23
 # ==================================================
-print(
-    "前23根 SMA:",
-    sum(closes[:23]) / 23
-)
-
-print(
-    "前200根 SMA:",
-    sum(closes[:200]) / 200
-)
-
-print(
-    "前490根 SMA:",
-    sum(closes) / len(closes)
-)
 ema23 = calculate_ema23(
     closes
 )

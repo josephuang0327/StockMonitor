@@ -179,18 +179,42 @@ def calculate_current_ema23(
     current_price
 ):
 
-    if len(completed_closes) < 22:
+    if len(completed_closes) < 23:
         return None
 
-    closes = (
-        completed_closes[-22:]
-        + [current_price]
+    # 先用完整歷史資料計算 EMA
+    ema23 = calculate_ema23(
+        completed_closes
     )
 
-    return calculate_ema23(
-        closes
+    if ema23 is None:
+        return None
+
+    # EMA23 的 alpha
+    alpha = 2 / (23 + 1)
+
+    # 使用目前價格更新 EMA
+    current_ema23 = (
+        current_price * alpha
+        + ema23 * (1 - alpha)
     )
 
+    return current_ema23
+# ==================================================
+# EMA23 ±2% 濾網
+# ==================================================
+
+def calculate_ema_filter(
+    ema23
+):
+
+    if ema23 is None:
+        return None, None
+
+    ema_up = ema23 * 1.02
+    ema_dw = ema23 * 0.98
+
+    return ema_up, ema_dw
 # ==================================================
 # 判斷 Signal
 # ==================================================
