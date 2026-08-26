@@ -196,41 +196,6 @@ while True:
                 price
             )
 
-
-            # ==================================================
-            # 買一 / 賣一
-            # ==================================================
-
-            bids = quote.get(
-                "bids",
-                []
-            )
-
-            asks = quote.get(
-                "asks",
-                []
-            )
-
-
-            if not bids or not asks:
-
-                print(
-                    f"{stock} "
-                    f"沒有買一或賣一資料"
-                )
-
-                continue
-
-
-            buy1 = float(
-                bids[0]["price"]
-            )
-
-            sell1 = float(
-                asks[0]["price"]
-            )
-
-
             # ==================================================
             # 計算 MA / BBand / Level
             #
@@ -333,7 +298,7 @@ while True:
                     "name",
                     str(stock)
                 ),
-                buy1=buy1,
+                price=price,
                 ma_data=indicators,
                 status=MA_STATUS[stock]
             )
@@ -369,9 +334,6 @@ while True:
 
                         f"Price: {price:g} | "
 
-                        f"Buy: {buy1:g} | "
-                        f"Sell: {sell1:g} | "
-
                         f"EMA23: {ema23:.2f} | "
 
                         f"EMA_UP: {ema_up:.2f} | "
@@ -386,10 +348,7 @@ while True:
                         f"{stock} "
                         f"{quote.get('name', '')} | "
 
-                        f"Price: {price:g} | "
-
-                        f"Buy: {buy1:g} | "
-                        f"Sell: {sell1:g}"
+                        f"Price: {price:g}"
                     )
 
 

@@ -222,7 +222,7 @@ def calculate_ema_filter(
 def check_signals(
     stock,
     name,
-    buy1,
+    price,
     ma_data,
     status
 ):
@@ -251,7 +251,7 @@ def check_signals(
     ma5_trigger = False
 
 
-    if buy1 <= ma5:
+    if price <= ma5:
 
         if not status["MA5"]:
 
@@ -271,7 +271,7 @@ def check_signals(
     ma10_trigger = False
 
 
-    if buy1 <= ma10:
+    if price <= ma10:
 
         if not status["MA10"]:
 
@@ -291,7 +291,7 @@ def check_signals(
     ma20_trigger = False
 
 
-    if buy1 <= ma20:
+    if price <= ma20:
 
         if not status["MA20"]:
 
@@ -311,7 +311,7 @@ def check_signals(
     lb_trigger = False
 
 
-    if buy1 <= lb:
+    if price <= lb:
 
         if not status["LB"]:
 
@@ -331,7 +331,7 @@ def check_signals(
     ub_trigger = False
 
 
-    if buy1 >= ub:
+    if price >= ub:
 
         if not status["UB"]:
 
@@ -351,7 +351,7 @@ def check_signals(
     level_neg8_trigger = False
 
 
-    if buy1 <= level_neg8:
+    if price <= level_neg8:
 
         if not status["LEVEL_NEG8"]:
 
@@ -371,7 +371,7 @@ def check_signals(
     level8_trigger = False
 
 
-    if buy1 >= level8:
+    if price >= level8:
 
         if not status["LEVEL_8"]:
 
@@ -401,7 +401,7 @@ def check_signals(
 
             f"[🈷️線]  "
             f"{stock} {name} \n"
-            f"💲: {buy1:g} \n"
+            f"💲: {price:g} \n"
             f"Ma20: {ma20:.2f}"
         )
 
@@ -412,7 +412,7 @@ def check_signals(
 
             f"[🔟日]  "
             f"{stock} {name} \n"
-            f"💲: {buy1:g} \n"
+            f"💲: {price:g} \n"
             f"Ma10: {ma10:.2f}"
         )
 
@@ -423,7 +423,7 @@ def check_signals(
 
             f"[5️⃣日]  "
             f"{stock} {name} \n"
-            f"💲: {buy1:g} \n"
+            f"💲: {price:g} \n"
             f"Ma5: {ma5:.2f}"
         )
 
@@ -438,7 +438,7 @@ def check_signals(
 
             f"[🔼UB]  "
             f"{stock} {name} \n"
-            f"💲: {buy1:g} \n"
+            f"💲: {price:g} \n"
             f"UB2.00: {ub:.2f}"
         )
 
@@ -453,7 +453,7 @@ def check_signals(
 
             f"[位階 8️⃣]  "
             f"{stock} {name} \n"
-            f"💲: {buy1:g} \n"
+            f"💲: {price:g} \n"
             f"LvL 8: {level8:.2f}"
         )
 
@@ -468,7 +468,7 @@ def check_signals(
 
             f"[位階🔻8️⃣]  "
             f"{stock} {name} \n"
-            f"💲: {buy1:g} \n"
+            f"💲: {price:g} \n"
             f"LvL -8: {level_neg8:.2f}"
         )
 
@@ -483,7 +483,7 @@ def check_signals(
 
             f"[🔽LB]  "
             f"{stock} {name} \n"
-            f"💲: {buy1:g} \n"
+            f"💲: {price:g} \n"
             f"LB2.00: {lb:.2f}"
         )
 
