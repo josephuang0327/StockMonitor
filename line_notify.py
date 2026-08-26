@@ -1,5 +1,8 @@
+import os
 import requests
-from config import LINE_CHANNEL_ACCESS_TOKEN, LINE_USER_ID
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ==================================================
 # LINE 設定
@@ -9,7 +12,13 @@ from config import LINE_CHANNEL_ACCESS_TOKEN, LINE_USER_ID
 LINE_URL = (
     "https://api.line.me/v2/bot/message/push"
 )
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv(
+    "LINE_CHANNEL_ACCESS_TOKEN"
+)
 
+LINE_USER_ID = os.getenv(
+    "LINE_USER_ID"
+)
 
 # ==================================================
 # LINE 通知
@@ -78,5 +87,5 @@ text1= (
     f"💲: 1223 \n"
     f"LvL 8: 321"
     )
-send_line(text)
+# send_line(text)
 # send_line(text1)

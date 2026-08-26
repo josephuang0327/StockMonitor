@@ -142,6 +142,54 @@ def calculate_indicators(
         "level_neg8": level_neg8
     }
 
+# ==================================================
+# EMA23
+# ==================================================
+
+def calculate_ema23(
+    closes
+):
+
+    if len(closes) < 23:
+        return None
+
+    alpha = 2 / (23 + 1)
+
+    # 前23根收盤價的 SMA
+    ema = sum(
+        closes[:23]
+    ) / 23
+
+    # 從第24根開始計算 EMA
+    for close in closes[23:]:
+
+        ema = (
+            close * alpha
+            + ema * (1 - alpha)
+        )
+
+    return ema
+
+# ==================================================
+# 目前價格計算 EMA23
+# ==================================================
+
+def calculate_current_ema23(
+    completed_closes,
+    current_price
+):
+
+    if len(completed_closes) < 22:
+        return None
+
+    closes = (
+        completed_closes[-22:]
+        + [current_price]
+    )
+
+    return calculate_ema23(
+        closes
+    )
 
 # ==================================================
 # 判斷 Signal

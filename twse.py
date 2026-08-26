@@ -20,9 +20,7 @@ from indicators import (
 # ==================================================
 
 Stocks = [
-    2330,
-    3653,
-    2327
+    2330
 ]
 
 
@@ -224,15 +222,15 @@ while True:
             # LINE
             # ==================================================
 
-            for signal in signals:
+            # for signal in signals:
 
-                print(
-                    signal
-                )
+            #     print(
+            #         signal
+            #     )
 
-                send_line(
-                    signal
-                )
+            #     send_line(
+            #         signal
+            #     )
 
 
             # ==================================================
