@@ -23,10 +23,12 @@ API_KEY = os.getenv(
     "FUGLE_API_KEY"
 )
 
+
 BASE_URL = (
     "https://api.fugle.tw/"
     "marketdata/v1.0/stock"
 )
+
 
 HEADERS = {
     "X-API-KEY": API_KEY
@@ -38,9 +40,11 @@ HEADERS = {
 # ==================================================
 
 HISTORY_30M_BARS = 200
+
 HISTORY_DAILY_DAYS = 19
 
 TIMEFRAME = "30"
+
 
 HISTORY_FILE = os.path.join(
 
@@ -295,7 +299,6 @@ def fetch_intraday_30m(
 # 舊版即時價格 HTTP API
 #
 # main.py 已不再使用
-# 保留給其他程式相容
 # ==================================================
 
 def fetch_realtime_price(
@@ -611,9 +614,9 @@ def update_stock_30m(
         )
 
 
-        # --------------------------------------------------
+        # ==================================================
         # 本地不足200根
-        # --------------------------------------------------
+        # ==================================================
 
         if len(existing) < HISTORY_30M_BARS:
 
@@ -652,9 +655,9 @@ def update_stock_30m(
                 ] = candle
 
 
-        # --------------------------------------------------
+        # ==================================================
         # 本地已有足夠資料
-        # --------------------------------------------------
+        # ==================================================
 
         else:
 
@@ -714,6 +717,11 @@ def update_stock_30m(
 
     # ==================================================
     # 合併今天資料
+    #
+    # 注意：
+    # 啟動時仍會把今天盤中K放進本地，
+    # 但後續 update_completed_30m()
+    # 只會正式保留「已完成」的K。
     # ==================================================
 
     for date_time, candle in (
@@ -876,7 +884,7 @@ def update_all_30m(
 # ==================================================
 # 盤中更新「已完成」30分K
 #
-# 只有跨過30分鐘時由 main.py 呼叫
+# 只有 main.py 跨過30分鐘時呼叫
 # ==================================================
 
 def update_completed_30m(
@@ -900,7 +908,7 @@ def update_completed_30m(
 
 
     # ==================================================
-    # 現在時間
+    # 目前時間
     # ==================================================
 
     now = datetime.now()
@@ -945,6 +953,10 @@ def update_completed_30m(
 
 
             if not intraday_data:
+
+                print(
+                    f"{stock} 今天沒有30分K資料"
+                )
 
                 continue
 
@@ -1002,10 +1014,23 @@ def update_completed_30m(
 
 
             # ==================================================
-            # 找出已完成30分K
+            # 找出「已完成」30分K
+            #
+            # 例如現在：
+            #
+            # 11:05
+            #
+            # current_30m = 11:00
+            #
+            # 10:30 < 11:00
+            # => 10:30這根已完成
+            #
+            # 11:00 < 11:00
+            # => False
+            # => 11:00這根仍在形成
             # ==================================================
 
-            added_count = 0
+            completed_data = {}
 
 
             for date_time, candle in (
@@ -1020,10 +1045,6 @@ def update_completed_30m(
                         )
                     )
 
-
-                    # --------------------------------------------------
-                    # 去掉 timezone
-                    # --------------------------------------------------
 
                     if (
                         candle_datetime.tzinfo
@@ -1042,37 +1063,42 @@ def update_completed_30m(
                     continue
 
 
-                # --------------------------------------------------
-                # 只有開始時間早於目前30分鐘區間
-                # 才算完成
-                #
-                # 現在11:05：
-                #
-                # 10:30 -> 完成
-                # 11:00 -> 未完成
-                # --------------------------------------------------
-
                 if (
                     candle_datetime
                     < current_30m
                 ):
 
-                    if (
-                        date_time
-                        not in existing
-                    ):
-
-                        added_count += 1
-
-
-                    # --------------------------------------------------
-                    # 已存在也更新
-                    # 防止資料修正
-                    # --------------------------------------------------
-
-                    existing[
+                    completed_data[
                         date_time
                     ] = candle
+
+
+            # ==================================================
+            # 只把已完成K寫入本地
+            # ==================================================
+
+            added_count = 0
+
+
+            for date_time, candle in (
+                completed_data.items()
+            ):
+
+                if date_time not in existing:
+
+                    added_count += 1
+
+
+                # --------------------------------------------------
+                # 即使已存在也更新
+                #
+                # 避免 Fugle 資料後續修正時，
+                # 本地資料還停留在舊值
+                # --------------------------------------------------
+
+                existing[
+                    date_time
+                ] = candle
 
 
             # ==================================================
@@ -1089,18 +1115,78 @@ def update_completed_30m(
 
 
             # ==================================================
+            # 再次保護：
+            #
+            # 這裡只留下「已完成」30分K
+            #
+            # 防止舊版 history.json 裡
+            # 還存在正在形成中的K
+            # ==================================================
+
+            completed_local_data = []
+
+
+            for candle in all_data:
+
+                try:
+
+                    candle_datetime = (
+                        datetime.fromisoformat(
+                            candle["date"]
+                        )
+                    )
+
+
+                    if (
+                        candle_datetime.tzinfo
+                        is not None
+                    ):
+
+                        candle_datetime = (
+                            candle_datetime.replace(
+                                tzinfo=None
+                            )
+                        )
+
+
+                    if (
+                        candle_datetime
+                        < current_30m
+                    ):
+
+                        completed_local_data.append(
+                            candle
+                        )
+
+
+                except Exception:
+
+                    continue
+
+
+            # ==================================================
             # 保留最近200根
             # ==================================================
 
-            if len(all_data) > HISTORY_30M_BARS:
+            if (
+                len(
+                    completed_local_data
+                )
+                >
+                HISTORY_30M_BARS
+            ):
 
-                final_data = all_data[
-                    -HISTORY_30M_BARS:
-                ]
+                final_data = (
+                    completed_local_data[
+                        -HISTORY_30M_BARS:
+                    ]
+                )
 
             else:
 
-                final_data = all_data
+                final_data = (
+                    completed_local_data
+                )
 
 
             # ==================================================
@@ -1503,6 +1589,13 @@ def _handle_websocket_disconnect(
     message
 ):
 
+    # --------------------------------------------------
+    # 這裡只顯示斷線資訊
+    #
+    # 不在 callback 裡重新連線
+    # 避免產生多重 WebSocket connection
+    # --------------------------------------------------
+
     print(
 
         f"行情連接斷線: "
@@ -1550,6 +1643,15 @@ def _handle_websocket_message(
         # ==================================================
 
         if event == "pong":
+
+            return
+
+
+        # ==================================================
+        # heartbeat
+        # ==================================================
+
+        if event == "heartbeat":
 
             return
 
@@ -1612,6 +1714,17 @@ def _handle_websocket_message(
             price = data.get(
                 "price"
             )
+
+
+            # --------------------------------------------------
+            # 防止試撮資料被當成正常成交價
+            # --------------------------------------------------
+
+            if data.get(
+                "isTrial"
+            ):
+
+                return
 
 
             if (
@@ -1678,9 +1791,42 @@ def start_websocket(
         return False
 
 
+    # ==================================================
+    # 如果已經啟動
+    # 不重複建立 connection
+    # ==================================================
+
     if websocket_started:
 
+        print(
+            "WebSocket 已經啟動，"
+            "不重複建立連線"
+        )
+
         return True
+
+
+    # ==================================================
+    # 清理上一個可能殘留的 client
+    # ==================================================
+
+    if (
+
+        websocket_client is not None
+
+        or
+
+        websocket_stock is not None
+
+    ):
+
+        try:
+
+            _force_close_websocket()
+
+        except Exception:
+
+            pass
 
 
     websocket_stocks = [
@@ -1695,6 +1841,10 @@ def start_websocket(
     realtime_prices.clear()
 
 
+    # ==================================================
+    # 建立新的 WebSocket Client
+    # ==================================================
+
     websocket_client = WebSocketClient(
 
         api_key=API_KEY
@@ -1706,6 +1856,10 @@ def start_websocket(
         websocket_client.stock
     )
 
+
+    # ==================================================
+    # Callback
+    # ==================================================
 
     websocket_stock.on(
 
@@ -1743,10 +1897,21 @@ def start_websocket(
     )
 
 
+    # ==================================================
+    # 建立連線
+    # ==================================================
+
     try:
 
         websocket_stock.connect()
 
+
+        # ==================================================
+        # 訂閱 trades
+        #
+        # Fugle 官方 Python SDK 支援
+        # channel + symbol / symbols 的訂閱方式
+        # ==================================================
 
         websocket_stock.subscribe({
 
@@ -1792,11 +1957,13 @@ def start_websocket(
         )
 
 
-        websocket_client = None
+        try:
 
-        websocket_stock = None
+            _force_close_websocket()
 
-        websocket_started = False
+        except Exception:
+
+            pass
 
 
         return False
@@ -1830,6 +1997,192 @@ def get_realtime_price(
 
 
 # ==================================================
+# 強制關閉 WebSocket
+#
+# 不同版本 SDK 的底層 close 方法名稱
+# 可能不同，因此做多層安全處理。
+# ==================================================
+
+def _force_close_websocket():
+
+    global websocket_client
+    global websocket_stock
+    global websocket_stocks
+    global websocket_started
+
+
+    # ==================================================
+    # 先取消訂閱
+    # ==================================================
+
+    if websocket_stock is not None:
+
+        try:
+
+            if websocket_stocks:
+
+                websocket_stock.unsubscribe({
+
+                    "channel":
+                        "trades",
+
+                    "symbols":
+                        websocket_stocks
+
+                })
+
+                print(
+                    "取消訂閱指令已送出"
+                )
+
+
+        except Exception as e:
+
+            print(
+                "取消訂閱失敗:",
+                e
+            )
+
+
+    # ==================================================
+    # 嘗試關閉 stock connection
+    #
+    # SDK 版本不同時可能提供不同方法，
+    # 所以依序安全嘗試。
+    # ==================================================
+
+    closed = False
+
+
+    if websocket_stock is not None:
+
+        for method_name in (
+
+            "disconnect",
+
+            "close",
+
+            "stop"
+
+        ):
+
+            try:
+
+                method = getattr(
+
+                    websocket_stock,
+
+                    method_name,
+
+                    None
+
+                )
+
+
+                if callable(method):
+
+                    method()
+
+                    closed = True
+
+                    print(
+                        f"WebSocket 已執行 "
+                        f"{method_name}()"
+                    )
+
+                    break
+
+
+            except Exception as e:
+
+                print(
+
+                    f"WebSocket "
+                    f"{method_name}() 失敗:",
+                    e
+
+                )
+
+
+    # ==================================================
+    # 如果 stock 沒有關閉方法
+    # 再嘗試 client
+    # ==================================================
+
+    if (
+
+        not closed
+
+        and
+
+        websocket_client is not None
+
+    ):
+
+        for method_name in (
+
+            "disconnect",
+
+            "close",
+
+            "stop"
+
+        ):
+
+            try:
+
+                method = getattr(
+
+                    websocket_client,
+
+                    method_name,
+
+                    None
+
+                )
+
+
+                if callable(method):
+
+                    method()
+
+                    closed = True
+
+                    print(
+                        f"WebSocket Client 已執行 "
+                        f"{method_name}()"
+                    )
+
+                    break
+
+
+            except Exception as e:
+
+                print(
+
+                    f"WebSocket Client "
+                    f"{method_name}() 失敗:",
+                    e
+
+                )
+
+
+    # ==================================================
+    # 清理 Python 端狀態
+    # ==================================================
+
+    websocket_started = False
+
+    websocket_stocks = []
+
+    realtime_prices.clear()
+
+    websocket_stock = None
+
+    websocket_client = None
+
+
+# ==================================================
 # 停止 WebSocket
 # ==================================================
 
@@ -1838,43 +2191,47 @@ def stop_websocket():
     global websocket_started
 
 
-    if not websocket_started:
+    # --------------------------------------------------
+    # 即使狀態顯示 False，
+    # 也檢查 client / stock 是否還存在。
+    # --------------------------------------------------
+
+    if (
+
+        not websocket_started
+
+        and
+
+        websocket_stock is None
+
+        and
+
+        websocket_client is None
+
+    ):
 
         return
 
 
+    print(
+        "正在取消 WebSocket 訂閱..."
+    )
+
+
     try:
 
-        print(
-            "正在取消 WebSocket 訂閱..."
-        )
-
-
-        websocket_stock.unsubscribe({
-
-            "channel":
-                "trades",
-
-            "symbols":
-                websocket_stocks
-
-        })
-
-
-        print(
-            "取消訂閱指令已送出"
-        )
+        _force_close_websocket()
 
 
     except Exception as e:
 
         print(
-            "取消訂閱失敗:",
+
+            "停止 WebSocket "
+            "失敗:",
             e
+
         )
-
-
-    websocket_started = False
 
 
 # ==================================================
@@ -1979,7 +2336,7 @@ if __name__ == "__main__":
         )
 
 
-        os._exit(0)
+        raise SystemExit(0)
 
 
     except Exception as e:
@@ -1992,4 +2349,13 @@ if __name__ == "__main__":
         )
 
 
-        os._exit(1)
+        try:
+
+            stop_websocket()
+
+        except Exception:
+
+            pass
+
+
+        raise SystemExit(1)

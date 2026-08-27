@@ -24,7 +24,11 @@ from indicators import (
 # ==================================================
 
 Stocks = [
-    2330,3653,3017,3037,1815
+    2330,
+    3653,
+    3017,
+    3037,
+    1815
 ]
 
 
@@ -90,6 +94,7 @@ for stock in Stocks:
 
         continue
 
+
     if len(
         history[stock_key]
     ) < 19:
@@ -100,6 +105,7 @@ for stock in Stocks:
         )
 
         continue
+
 
     MA_DATA[stock] = [
 
@@ -135,6 +141,7 @@ for stock in MA_DATA:
         "LEVEL_NEG8": False,
 
         "LEVEL_8": False
+
     }
 
 
@@ -153,7 +160,7 @@ if not start_websocket(
         "Fugle WebSocket 啟動失敗"
     )
 
-    os._exit(1)
+    raise SystemExit(1)
 
 
 print("\n========================================")
@@ -194,6 +201,7 @@ last_30m_period = now.replace(
     second=0,
 
     microsecond=0
+
 )
 
 
@@ -225,6 +233,7 @@ try:
             second=0,
 
             microsecond=0
+
         )
 
 
@@ -232,6 +241,10 @@ try:
         # 跨過30分鐘
         #
         # 例如：
+        #
+        # 10:29 -> 10:30
+        #
+        # 更新剛完成的10:00~10:30
         #
         # 10:59 -> 11:00
         #
@@ -271,6 +284,10 @@ try:
                     e
                 )
 
+
+            # --------------------------------------------------
+            # 更新區間狀態
+            # --------------------------------------------------
 
             last_30m_period = (
                 current_30m_period
@@ -438,7 +455,7 @@ try:
 
 
                     # --------------------------------------------------
-                    # 已完成30分K計算EMA23
+                    # 使用已完成30分K計算 EMA23
                     # --------------------------------------------------
 
                     ema23 = calculate_ema23(
@@ -502,7 +519,7 @@ try:
 
                 stock=stock,
 
-                name=str(stock),
+                name="",
 
                 price=price,
 
@@ -520,15 +537,15 @@ try:
             for signal in signals:
 
                 print(
-                    f"*** SIGNAL *** {signal}"
+                    f"*** SIGNAL *** {signal}\n"
                 )
 
 
         # ==================================================
         # CPU 讓出
         #
-        # 這不是HTTP request
-        # WebSocket仍然持續接收
+        # 這不是 HTTP request
+        # WebSocket 仍然持續接收
         # ==================================================
 
         time.sleep(0.01)
@@ -565,7 +582,7 @@ except KeyboardInterrupt:
         "程式已停止"
     )
 
-    os._exit(0)
+    raise SystemExit(0)
 
 
 # ==================================================
@@ -588,4 +605,4 @@ except Exception as e:
         pass
 
 
-    os._exit(1)
+    raise SystemExit(1)
