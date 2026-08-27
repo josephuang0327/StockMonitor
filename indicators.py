@@ -451,7 +451,7 @@ def check_signals(
 
         signals.append(
 
-            f"[位階 8️⃣]  "
+            f"[位階 8️⃣ ]  "
             f"{stock} {name} \n"
             f"💲: {price:g} \n"
             f"LvL 8: {level8:.2f}"
@@ -466,7 +466,7 @@ def check_signals(
 
         signals.append(
 
-            f"[位階🔻8️⃣]  "
+            f"[位階🔻8️⃣ ]  "
             f"{stock} {name} \n"
             f"💲: {price:g} \n"
             f"LvL -8: {level_neg8:.2f}"

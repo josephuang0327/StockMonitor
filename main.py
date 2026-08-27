@@ -1,13 +1,14 @@
 import time
+import os
+from datetime import datetime
 
 from fugle import (
     update_all_daily,
     update_all_30m,
-    fetch_realtime_price
-)
-
-from line_notify import (
-    send_line
+    start_websocket,
+    stop_websocket,
+    get_realtime_prices,
+    update_completed_30m
 )
 
 from indicators import (
@@ -23,43 +24,50 @@ from indicators import (
 # ==================================================
 
 Stocks = [
-    2330
+    2330,3653,3017,3037,1815
 ]
 
 
 # ==================================================
-# 歷史資料
+# 啟動
 # ==================================================
 
-print(
-    "正在檢查並校正歷史資料..."
-)
+print("========================================")
+print("程式交易監控系統啟動")
+print("股票:", ", ".join(map(str, Stocks)))
+print("========================================")
+
+
+# ==================================================
+# 1. 更新歷史日K
+# ==================================================
+
+print("\n[1/3] 更新歷史日K...")
 
 history = update_all_daily(
     Stocks
 )
 
+print("歷史日K更新完成")
+
 
 # ==================================================
-# 30分K DATA
+# 2. 更新30分K
 # ==================================================
 
-print(
-    "\n正在檢查並更新30分K資料..."
-)
+print("\n[2/3] 更新30分K...")
 
 history_30m = update_all_30m(
     Stocks
 )
-
-# 保留原本日K history
-# 只把30分K資料加入進來
 
 if "30m" in history_30m:
 
     history["30m"] = (
         history_30m["30m"]
     )
+
+print("30分K更新完成")
 
 
 # ==================================================
@@ -77,7 +85,7 @@ for stock in Stocks:
 
         print(
             f"{stock} 沒有歷史資料，"
-            f"跳過 MA 計算"
+            f"跳過指標計算"
         )
 
         continue
@@ -88,7 +96,7 @@ for stock in Stocks:
 
         print(
             f"{stock} 歷史資料不足19天，"
-            f"跳過 MA 計算"
+            f"跳過指標計算"
         )
 
         continue
@@ -99,6 +107,7 @@ for stock in Stocks:
 
         for date, close
         in history[stock_key]
+
     ]
 
 
@@ -130,93 +139,259 @@ for stock in MA_DATA:
 
 
 # ==================================================
-# 開始盤中監控
+# 3. 啟動 WebSocket
 # ==================================================
 
-while True:
+print("\n[3/3] 啟動 Fugle WebSocket...")
 
-    try:
 
-        if not MA_DATA:
+if not start_websocket(
+    Stocks
+):
 
-            print(
-                "目前沒有可以監控的股票"
-            )
+    print(
+        "Fugle WebSocket 啟動失敗"
+    )
 
-            time.sleep(10)
+    os._exit(1)
 
-            continue
+
+print("\n========================================")
+print("開始即時監控")
+print("監控股票:", ", ".join(map(str, Stocks)))
+print("按 Ctrl+C 停止")
+print("========================================")
+
+
+# ==================================================
+# 即時價格狀態
+# ==================================================
+
+last_prices = {}
+
+
+# ==================================================
+# 30分K區間狀態
+#
+# 用來判斷是否跨過30分鐘
+# ==================================================
+
+last_30m_period = None
+
+
+# ==================================================
+# 初始化目前30分鐘區間
+# ==================================================
+
+now = datetime.now()
+
+last_30m_period = now.replace(
+
+    minute=(
+        now.minute // 30
+    ) * 30,
+
+    second=0,
+
+    microsecond=0
+)
+
+
+# ==================================================
+# 主迴圈
+# ==================================================
+
+try:
+
+    while True:
+
+        # ==================================================
+        # 現在時間
+        # ==================================================
+
+        now = datetime.now()
 
 
         # ==================================================
-        # 取得 Fugle 即時報價
+        # 計算目前30分鐘區間
+        # ==================================================
+
+        current_30m_period = now.replace(
+
+            minute=(
+                now.minute // 30
+            ) * 30,
+
+            second=0,
+
+            microsecond=0
+        )
+
+
+        # ==================================================
+        # 跨過30分鐘
+        #
+        # 例如：
+        #
+        # 10:59 -> 11:00
+        #
+        # 更新剛完成的10:30~11:00
+        # ==================================================
+
+        if (
+            current_30m_period
+            > last_30m_period
+        ):
+
+            print(
+                f"\n[{now.strftime('%H:%M:%S')}] "
+                f"30分K完成，正在更新..."
+            )
+
+
+            try:
+
+                history = (
+                    update_completed_30m(
+                        Stocks,
+                        history
+                    )
+                )
+
+
+                print(
+                    "30分K更新完成"
+                )
+
+
+            except Exception as e:
+
+                print(
+                    "30分K更新失敗:",
+                    e
+                )
+
+
+            last_30m_period = (
+                current_30m_period
+            )
+
+
+        # ==================================================
+        # 取得 WebSocket 即時價格
+        # ==================================================
+
+        prices = get_realtime_prices()
+
+
+        # ==================================================
+        # 檢查所有股票
         # ==================================================
 
         for stock in MA_DATA:
 
             stock_key = str(stock)
 
-            try:
-
-                quote = (
-                    fetch_realtime_price(
-                        stock
-                    )
-                )
-
-            except Exception as e:
-
-                print(
-                    f"{stock} "
-                    f"Fugle 即時報價取得失敗:",
-                    e
-                )
-
-                continue
-
-
-            # ==================================================
-            # 最新成交價
-            # ==================================================
-
-            price = quote.get(
-                "lastPrice"
+            price = prices.get(
+                stock_key
             )
+
 
             if price is None:
 
-                print(
-                    f"{stock} "
-                    f"沒有取得最新成交價"
-                )
-
                 continue
+
 
             price = float(
                 price
             )
 
+
             # ==================================================
-            # 計算 MA / BBand / Level
-            #
-            # 現在價格全部使用 Fugle lastPrice
+            # 價格沒有變化
+            # 不重新計算
+            # ==================================================
+
+            if (
+
+                stock_key in last_prices
+
+                and
+
+                last_prices[
+                    stock_key
+                ] == price
+
+            ):
+
+                continue
+
+
+            # ==================================================
+            # 更新最後價格
+            # ==================================================
+
+            last_prices[
+                stock_key
+            ] = price
+
+
+            # ==================================================
+            # 成交時間
+            # ==================================================
+
+            receive_time = (
+                time.strftime(
+                    "%H:%M:%S"
+                )
+            )
+
+
+            print(
+                f"\n[{receive_time}] "
+                f"{stock} | "
+                f"Price: {price:g}"
+            )
+
+
+            # ==================================================
+            # MA / BBand / Level
             # ==================================================
 
             indicators = calculate_indicators(
+
                 MA_DATA[stock],
+
                 price
+
             )
+
+
             print(
-                f"{stock} 指標 | "
-                f"Price: {price:.2f} | "
-                f"MA5: {indicators['ma5']:.2f} | "
-                f"MA10: {indicators['ma10']:.2f} | "
-                f"MA20: {indicators['ma20']:.2f} | "
-                f"UB: {indicators['ub']:.2f} | "
-                f"LB: {indicators['lb']:.2f} | "
-                f"Level8: {indicators['level8']:.2f} | "
-                f"Level-8: {indicators['level_neg8']:.2f}"
+
+                f"MA5: "
+                f"{indicators['ma5']:.2f} | "
+
+                f"MA10: "
+                f"{indicators['ma10']:.2f} | "
+
+                f"MA20: "
+                f"{indicators['ma20']:.2f} \n "
+
+                f"UB: "
+                f"{indicators['ub']:.2f} | "
+
+                f"LB: "
+                f"{indicators['lb']:.2f} | "
+
+                f"Lv8: "
+                f"{indicators['level8']:.2f} | "
+
+                f"Lv-8: "
+                f"{indicators['level_neg8']:.2f}"
+
             )
+
 
             # ==================================================
             # EMA23
@@ -230,16 +405,27 @@ while True:
 
 
             if (
+
                 "30m" in history
-                and stock_key in history["30m"]
+
+                and
+
+                stock_key
+                in history["30m"]
+
             ):
 
                 candles_30m = (
-                    history["30m"][stock_key]
+                    history["30m"][
+                        stock_key
+                    ]
                 )
 
 
-                if len(candles_30m) >= 23:
+                if len(
+                    candles_30m
+                ) >= 23:
+
 
                     closes_30m = [
 
@@ -251,23 +437,26 @@ while True:
                     ]
 
 
-                    # 完全按照 testema.py
-                    # 的方式計算 EMA23
+                    # --------------------------------------------------
+                    # 已完成30分K計算EMA23
+                    # --------------------------------------------------
 
                     ema23 = calculate_ema23(
+
                         closes_30m
+
                     )
 
 
-                    # ==================================================
-                    # EMA 即時價格更新
-                    #
-                    # 最後一根已完成30分K的 EMA
-                    # 使用目前 Fugle 成交價更新
-                    # ==================================================
+                    # --------------------------------------------------
+                    # 使用目前即時成交價
+                    # 更新正在形成中的30分K
+                    # --------------------------------------------------
 
                     alpha = (
+
                         2 / (23 + 1)
+
                     )
 
 
@@ -275,9 +464,12 @@ while True:
 
                         price * alpha
 
-                        + ema23 * (
+                        +
+
+                        ema23 * (
                             1 - alpha
                         )
+
                     )
 
 
@@ -288,101 +480,112 @@ while True:
                     )
 
 
+                    print(
+
+                        f"EMA23: "
+                        f"{ema23:.2f} | "
+
+                        f"EMA_UP: "
+                        f"{ema_up:.2f} | "
+
+                        f"EMA_DW: "
+                        f"{ema_dw:.2f}"
+
+                    )
+
+
             # ==================================================
             # Signal
             # ==================================================
 
             signals = check_signals(
+
                 stock=stock,
-                name=quote.get(
-                    "name",
-                    str(stock)
-                ),
+
+                name=str(stock),
+
                 price=price,
+
                 ma_data=indicators,
+
                 status=MA_STATUS[stock]
+
             )
 
 
             # ==================================================
-            # LINE
+            # Signal 顯示
             # ==================================================
 
-            # for signal in signals:
+            for signal in signals:
 
-            #     print(
-            #         signal
-            #     )
-
-            #     send_line(
-            #         signal
-            #     )
-
-
-            # ==================================================
-            # 沒有 Signal
-            # ==================================================
-
-            if not signals:
-
-                if ema23 is not None:
-
-                    print(
-
-                        f"{stock} "
-                        f"{quote.get('name', '')} | "
-
-                        f"Price: {price:g} | "
-
-                        f"EMA23: {ema23:.2f} | "
-
-                        f"EMA_UP: {ema_up:.2f} | "
-
-                        f"EMA_DW: {ema_dw:.2f}"
-                    )
-
-                else:
-
-                    print(
-
-                        f"{stock} "
-                        f"{quote.get('name', '')} | "
-
-                        f"Price: {price:g}"
-                    )
+                print(
+                    f"*** SIGNAL *** {signal}"
+                )
 
 
         # ==================================================
-        # 抓取時間
+        # CPU 讓出
+        #
+        # 這不是HTTP request
+        # WebSocket仍然持續接收
         # ==================================================
 
-        print(
-
-            "-------抓取時間",
-
-            time.strftime(
-                "%H:%M:%S"
-            ),
-
-            "------\n"
-        )
+        time.sleep(0.01)
 
 
-    except KeyboardInterrupt:
+# ==================================================
+# Ctrl+C
+# ==================================================
 
-        print(
-            "\n程式已停止"
-        )
+except KeyboardInterrupt:
 
-        break
+    print(
+        "\n\n收到 Ctrl+C"
+    )
 
+    print(
+        "正在停止 Fugle WebSocket..."
+    )
+
+
+    try:
+
+        stop_websocket()
 
     except Exception as e:
 
         print(
-            "ERROR:",
+            "停止 WebSocket 失敗:",
             e
         )
 
 
-    time.sleep(10)
+    print(
+        "程式已停止"
+    )
+
+    os._exit(0)
+
+
+# ==================================================
+# 其他錯誤
+# ==================================================
+
+except Exception as e:
+
+    print(
+        "\n程式發生錯誤:",
+        e
+    )
+
+
+    try:
+
+        stop_websocket()
+
+    except Exception:
+        pass
+
+
+    os._exit(1)
